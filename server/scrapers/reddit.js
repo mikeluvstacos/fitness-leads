@@ -1,107 +1,71 @@
 /**
  * Reddit scraper – finds buyer posts for fitness equipment
- * Uses Reddit public JSON API with batched requests to avoid 429s
+ * Uses flair-based searches + targeted keywords for maximum results with minimal requests
  */
 const axios = require('axios');
-const { resolveLocation, getNearbyCities } = require('../location');
 
-const USER_AGENT = 'FitnessBuyerHunter/1.0 (fitness equipment lead finder)';
-const HEADERS = { 'User-Agent': USER_AGENT };
+const HEADERS = { 'User-Agent': 'FitnessBuyerHunter/1.0 (fitness equipment lead finder)' };
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// Run requests in small batches with a pause between each batch
-async function batchedFetch(tasks, batchSize = 5, delayMs = 1500) {
-  const results = [];
-  for (let i = 0; i < tasks.length; i += batchSize) {
-    const batch = tasks.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(fn => safeFetch(fn)));
-    results.push(...batchResults);
-    if (i + batchSize < tasks.length) await sleep(delayMs);
-  }
-  return results;
-}
-
-// City name → known Reddit community slugs
-const CITY_SUBREDDITS = {
-  'houston':       ['houston', 'houstontx'],
-  'dallas':        ['dallas', 'dfw'],
-  'austin':        ['austin'],
-  'san antonio':   ['sanantonio'],
-  'new york':      ['nyc', 'newyorkcity'],
-  'los angeles':   ['losangeles', 'la'],
-  'chicago':       ['chicago'],
-  'phoenix':       ['phoenix', 'az'],
-  'philadelphia':  ['philadelphia', 'philly'],
-  'san diego':     ['sandiego'],
-  'denver':        ['denver', 'denver_co'],
-  'seattle':       ['seattle'],
-  'portland':      ['portland'],
-  'miami':         ['miami'],
-  'atlanta':       ['atlanta'],
-  'nashville':     ['nashville'],
-  'charlotte':     ['charlotte'],
-  'las vegas':     ['lasvegas'],
-  'minneapolis':   ['minneapolis'],
-  'boston':        ['boston'],
-};
-
-// Subreddits focused on buying/selling or fitness gear
-const BUY_SUBS = [
-  'homegym', 'garagegym', 'gym', 'gyms',
-  'fitness', 'weightlifting', 'powerlifting', 'crossfit',
-  'bodyweightfitness', 'kettlebell', 'pelotoncycle',
-  'xxfitness', 'loseit', 'running',
+// Flair searches — returns posts tagged "Want To Buy" in the top fitness subs
+// These are 100% buyer posts by definition, no filtering needed
+const FLAIR_SEARCHES = [
+  { sub: 'homegym',           q: 'flair:"Want To Buy"' },
+  { sub: 'homegym',           q: 'flair:WTB' },
+  { sub: 'garagegym',         q: 'flair:"Want To Buy"' },
+  { sub: 'garagegym',         q: 'flair:WTB' },
+  { sub: 'homegym',           q: 'flair:"ISO"' },
 ];
 
-// Equipment terms to search for individually
-const EQUIPMENT_TERMS = [
-  'squat rack', 'power rack', 'barbell', 'bumper plates', 'weight plates',
-  'dumbbells', 'adjustable dumbbells', 'kettlebell', 'weight bench',
-  'treadmill', 'elliptical', 'stationary bike', 'rowing machine',
-  'peloton', 'nordictrack', 'bowflex', 'matrix fitness', 'precor', 'life fitness',
-  'stairmaster', 'freemotion', 'cable machine', 'functional trainer',
-  'smith machine', 'leg press', 'lat pulldown', 'pull up bar',
-  'gym equipment', 'fitness equipment', 'home gym',
+// Subreddit keyword searches — top buyer-intent terms in best subs
+const SUB_SEARCHES = [
+  { sub: 'homegym',           q: 'WTB' },
+  { sub: 'homegym',           q: 'ISO' },
+  { sub: 'garagegym',         q: 'WTB' },
+  { sub: 'garagegym',         q: 'ISO' },
+  { sub: 'powerlifting',      q: 'WTB' },
+  { sub: 'weightlifting',     q: 'WTB' },
+  { sub: 'crossfit',          q: 'WTB equipment' },
+  { sub: 'fitness',           q: 'WTB gym equipment' },
 ];
 
-// Buyer intent phrases to pair with equipment
-const BUYER_PHRASES = ['WTB', 'ISO', 'want to buy', 'looking to buy', 'looking for used'];
-
-// Build subreddit searches: every sub × every buyer phrase
-const BASE_SUBREDDIT_SEARCHES = BUY_SUBS.flatMap(sub =>
-  BUYER_PHRASES.map(q => ({ sub, q }))
-);
-
-// Base global searches (no location)
-const BASE_GLOBAL_SEARCHES = [
-  // WTB + specific equipment
-  ...EQUIPMENT_TERMS.map(t => `WTB ${t}`),
-  // ISO + specific equipment
-  ...EQUIPMENT_TERMS.map(t => `ISO ${t}`),
-  // broader intent phrases
+// Global Reddit searches for specific equipment buyers
+const GLOBAL_SEARCHES = [
+  'WTB squat rack',
+  'WTB power rack',
+  'WTB treadmill',
+  'WTB elliptical',
+  'WTB peloton',
+  'WTB dumbbells',
+  'WTB barbell',
+  'WTB weight bench',
+  'WTB bumper plates',
+  'WTB cable machine',
+  'WTB stairmaster',
+  'WTB life fitness',
+  'WTB precor',
+  'WTB matrix fitness',
+  'WTB freemotion',
+  'ISO squat rack',
+  'ISO treadmill',
+  'ISO peloton',
+  'ISO gym equipment',
+  'ISO home gym',
   'want to buy gym equipment',
-  'want to buy home gym',
-  'looking for used fitness equipment',
+  'looking to buy treadmill',
+  'looking to buy squat rack',
+  'looking to buy gym equipment',
   'buying used gym equipment',
-  'anyone selling squat rack',
-  'anyone selling treadmill',
-  'anyone selling dumbbells',
   'gym closing equipment sale',
   'commercial gym equipment for sale',
-  'bulk gym equipment',
 ];
 
-async function fetchSubreddit(sub, q) {
-  const url = `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=1&sort=new&limit=25&t=year`;
-  const res = await axios.get(url, { headers: HEADERS, timeout: 10000 });
-  return res.data?.data?.children || [];
-}
-
-async function fetchGlobal(q) {
-  const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&limit=25&t=year`;
-  const res = await axios.get(url, { headers: HEADERS, timeout: 10000 });
-  return res.data?.data?.children || [];
+async function safeFetch(url) {
+  try {
+    const res = await axios.get(url, { headers: HEADERS, timeout: 12000 });
+    return res.data?.data?.children || [];
+  } catch {
+    return [];
+  }
 }
 
 function mapPost(post) {
@@ -115,71 +79,38 @@ function mapPost(post) {
   };
 }
 
-const BUY_KEYWORDS = /\b(wtb|iso|want\s+to\s+buy|looking\s+to\s+buy|looking\s+for|buying|need|needed|wanted|purchase|acquire|in\s+search\s+of|anyone\s+selling|where\s+can\s+i\s+(find|get|buy)|seeking|interested\s+in\s+buying|help\s+me\s+find)\b/i;
-const SELL_KEYWORDS = /\b(wts|wtt|selling\b|for\s+sale|fs\b|\[sold\]|asking\s+\$|price\s+drop|price\s+reduced|obo|firm\s+price)\b/i;
+// Light filter — only drop obvious seller posts
+const SELL_KEYWORDS = /\b(wts|wtt|\bfs\b|\[fs\]|\[sold\]|for\s+sale|selling\b|price\s+drop|asking\s+\$|obo\b|firm\s+price)\b/i;
+const BUY_KEYWORDS  = /\b(wtb|iso\b|want\s+to\s+buy|looking\s+to\s+buy|looking\s+for|buying|need|wanted|in\s+search\s+of|seeking|where\s+can\s+i\s+(find|get|buy))\b/i;
 
 function isBuyerPost(post) {
   const text = `${post.title} ${post.snippet}`;
-  // If it's clearly a seller post, drop it
   if (SELL_KEYWORDS.test(text)) return false;
-  // Keep if it has any buyer signal
   return BUY_KEYWORDS.test(text);
 }
 
-async function safeFetch(fn) {
-  try { return await fn(); } catch { return []; }
-}
+async function scrape() {
+  // Build all request URLs
+  const urls = [
+    // Flair-based (best results — these are tagged WTB by the poster)
+    ...FLAIR_SEARCHES.map(({ sub, q }) =>
+      `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=1&sort=new&limit=100&t=all`
+    ),
+    // Subreddit keyword searches
+    ...SUB_SEARCHES.map(({ sub, q }) =>
+      `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=1&sort=new&limit=50&t=month`
+    ),
+    // Global searches
+    ...GLOBAL_SEARCHES.map(q =>
+      `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&limit=25&t=month`
+    ),
+  ];
 
-async function scrape(zip = null) {
-  // Build location-specific searches
-  let locationSubreddits = [];
-  let locationGlobals = [];
+  // Fire all requests in parallel — ~40 requests, well under Reddit's rate limit
+  const batches = await Promise.all(urls.map(url => safeFetch(url)));
+  const all = batches.flat().map(mapPost);
 
-  if (zip) {
-    const loc = await resolveLocation(zip);
-    if (loc) {
-      const { city, state, cityLower } = loc;
-
-      // Primary city subreddit searches
-      const citySubs = CITY_SUBREDDITS[cityLower] || [];
-      locationSubreddits = citySubs.flatMap(sub => [
-        { sub, q: 'WTB gym equipment' },
-        { sub, q: 'ISO fitness equipment' },
-        { sub, q: 'want to buy treadmill' },
-        { sub, q: 'want to buy squat rack' },
-      ]);
-
-      // All cities within 100 miles
-      const nearbyCities = getNearbyCities(loc, 100);
-      const allCities = [city, ...nearbyCities];
-
-      // Build global searches for each nearby city
-      locationGlobals = allCities.flatMap(c => [
-        `WTB gym equipment ${c}`,
-        `ISO fitness equipment ${c}`,
-        `buying used gym equipment ${c}`,
-      ]);
-    }
-  }
-
-  const subredditSearches = [...BASE_SUBREDDIT_SEARCHES, ...locationSubreddits];
-  const globalSearches    = [...BASE_GLOBAL_SEARCHES,    ...locationGlobals];
-
-  // Batch requests 5 at a time with 1.5s pause — avoids Reddit 429s
-  const subTasks    = subredditSearches.map(({ sub, q }) => () => fetchSubreddit(sub, q));
-  const globalTasks = globalSearches.map(q => () => fetchGlobal(q));
-
-  const [subredditResults, globalResults] = await Promise.all([
-    batchedFetch(subTasks),
-    batchedFetch(globalTasks),
-  ]);
-
-  const all = [
-    ...subredditResults.flat(),
-    ...globalResults.flat(),
-  ].map(mapPost);
-
-  // Dedupe by URL + filter to buyer posts only
+  // Dedupe by URL + filter out seller posts
   const seen = new Set();
   return all.filter(l => {
     if (seen.has(l.url)) return false;

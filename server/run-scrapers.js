@@ -1,6 +1,5 @@
 const db = require('./db');
 const reddit = require('./scrapers/reddit');
-const yellowpages = require('./scrapers/yellowpages');
 
 async function runAllScrapers() {
   await db.setRunning(true);
@@ -8,28 +7,21 @@ async function runAllScrapers() {
   const zip = await db.getZip();
   console.log(`[Scraper] Using location: ${zip}`);
 
-  const scrapers = [
-    { name: 'Reddit',       fn: () => reddit.scrape(zip) },
-    { name: 'Yellow Pages', fn: () => yellowpages.scrape(zip) },
-  ];
-
   let totalNew = 0;
   let errorMsg = null;
 
-  for (const { name, fn } of scrapers) {
-    try {
-      console.log(`[Scraper] Running ${name}...`);
-      const listings = await fn();
-      let newCount = 0;
-      for (const listing of listings) {
-        if (await db.insertListing(listing)) newCount++;
-      }
-      console.log(`[Scraper] ${name}: ${listings.length} found, ${newCount} new`);
-      totalNew += newCount;
-    } catch (err) {
-      console.error(`[Scraper] ${name} failed:`, err.message);
-      errorMsg = `${name}: ${err.message}`;
+  try {
+    console.log('[Scraper] Running Reddit...');
+    const listings = await reddit.scrape();
+    let newCount = 0;
+    for (const listing of listings) {
+      if (await db.insertListing(listing)) newCount++;
     }
+    console.log(`[Scraper] Reddit: ${listings.length} found, ${newCount} new`);
+    totalNew += newCount;
+  } catch (err) {
+    console.error('[Scraper] Reddit failed:', err.message);
+    errorMsg = err.message;
   }
 
   await db.logRun(totalNew, errorMsg);
