@@ -20,6 +20,7 @@ export const Platform = {
   Reddit:     { color: '#EF4444', bg: '#2D0F0F' },
   Web:        { color: '#3B82F6', bg: '#0F1E3D' },
   OfferUp:    { color: '#F59E0B', bg: '#2D1F05' },
+  'Yellow Pages': { color: '#22C55E', bg: '#0F2D1A' },
 };
 
 export const Spacing = {

@@ -1,14 +1,16 @@
 const db = require('./db');
 const reddit = require('./scrapers/reddit');
+const yellowpages = require('./scrapers/yellowpages');
 
 async function runAllScrapers() {
   await db.setRunning(true);
 
   const zip = await db.getZip();
-  console.log(`[Scraper] Using zip: ${zip}`);
+  console.log(`[Scraper] Using location: ${zip}`);
 
   const scrapers = [
-    { name: 'Reddit', fn: () => reddit.scrape(zip) },
+    { name: 'Reddit',       fn: () => reddit.scrape(zip) },
+    { name: 'Yellow Pages', fn: () => yellowpages.scrape(zip) },
   ];
 
   let totalNew = 0;
