@@ -75,7 +75,8 @@ const EQUIPMENT_TERMS = [
   'squat rack', 'power rack', 'barbell', 'bumper plates', 'weight plates',
   'dumbbells', 'adjustable dumbbells', 'kettlebell', 'weight bench',
   'treadmill', 'elliptical', 'stationary bike', 'rowing machine',
-  'peloton', 'nordictrack', 'bowflex', 'cable machine', 'functional trainer',
+  'peloton', 'nordictrack', 'bowflex', 'matrix fitness', 'precor', 'life fitness',
+  'stairmaster', 'freemotion', 'cable machine', 'functional trainer',
   'smith machine', 'leg press', 'lat pulldown', 'pull up bar',
   'gym equipment', 'fitness equipment', 'home gym',
 ];
