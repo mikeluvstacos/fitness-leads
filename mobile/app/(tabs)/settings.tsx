@@ -6,17 +6,24 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
-import { triggerRun, fetchStatus } from '@/services/api';
+import { triggerRun, fetchStatus, fetchZip, saveZip } from '@/services/api';
 import Constants from 'expo-constants';
 
 export default function SettingsScreen() {
   const [isRunning, setIsRunning] = useState(false);
   const [runMsg, setRunMsg] = useState('');
+  const [zip, setZip] = useState('');
+  const [zipSaved, setZipSaved] = useState(false);
+  const [zipError, setZipError] = useState('');
 
   useEffect(() => {
     fetchStatus().then(s => setIsRunning(s.running)).catch(() => {});
+    fetchZip().then(z => setZip(z)).catch(() => {});
   }, []);
 
   const handleRunNow = async () => {
@@ -35,52 +42,98 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSaveZip = async () => {
+    if (!/^\d{5}$/.test(zip)) {
+      setZipError('Enter a valid 5-digit zip code.');
+      return;
+    }
+    setZipError('');
+    try {
+      await saveZip(zip);
+      setZipSaved(true);
+      setTimeout(() => setZipSaved(false), 3000);
+    } catch {
+      setZipError('Failed to save. Try again.');
+    }
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Settings</Text>
-      <Text style={styles.subtitle}>Fitness Buyer Hunter</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.subtitle}>Fitness Buyer Hunter</Text>
 
-      {/* Manual scrape */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Manual Hunt</Text>
-        <Text style={styles.sectionHint}>
-          Trigger a scan right now across Craigslist, Reddit, and DuckDuckGo.
-          Auto-scans run every 6 hours.
-        </Text>
-        {runMsg ? <Text style={styles.runMsg}>{runMsg}</Text> : null}
-        <TouchableOpacity
-          style={[styles.runBtn, isRunning && styles.runBtnDisabled]}
-          onPress={handleRunNow}
-          disabled={isRunning}
-        >
-          {isRunning ? (
-            <View style={styles.runBtnInner}>
-              <ActivityIndicator size="small" color={Colors.background} />
-              <Text style={styles.runBtnText}>Scanning...</Text>
-            </View>
-          ) : (
-            <Text style={styles.runBtnText}>▶ Run Hunt Now</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* Zip Code */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Search Location</Text>
+          <Text style={styles.sectionHint}>
+            Enter your zip code to find buyers near you. Used by all scans including auto-scans.
+          </Text>
+          <View style={styles.zipRow}>
+            <TextInput
+              style={styles.zipInput}
+              value={zip}
+              onChangeText={setZip}
+              placeholder="e.g. 77001"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={5}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveZip}
+            />
+            <TouchableOpacity style={styles.zipBtn} onPress={handleSaveZip}>
+              <Text style={styles.zipBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+          {zipSaved ? <Text style={styles.successMsg}>Zip saved! Next scan will use this location.</Text> : null}
+          {zipError ? <Text style={styles.errorMsg}>{zipError}</Text> : null}
+        </View>
 
-      {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.aboutRow}>
-          <Text style={styles.aboutLabel}>App</Text>
-          <Text style={styles.aboutValue}>Fitness Buyer Hunter</Text>
+        {/* Manual scrape */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Manual Hunt</Text>
+          <Text style={styles.sectionHint}>
+            Trigger a scan right now across Reddit using your zip code location.
+            Auto-scans run every 6 hours.
+          </Text>
+          {runMsg ? <Text style={styles.runMsg}>{runMsg}</Text> : null}
+          <TouchableOpacity
+            style={[styles.runBtn, isRunning && styles.runBtnDisabled]}
+            onPress={handleRunNow}
+            disabled={isRunning}
+          >
+            {isRunning ? (
+              <View style={styles.runBtnInner}>
+                <ActivityIndicator size="small" color={Colors.background} />
+                <Text style={styles.runBtnText}>Scanning...</Text>
+              </View>
+            ) : (
+              <Text style={styles.runBtnText}>▶ Run Hunt Now</Text>
+            )}
+          </TouchableOpacity>
         </View>
-        <View style={styles.aboutRow}>
-          <Text style={styles.aboutLabel}>Version</Text>
-          <Text style={styles.aboutValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
+
+        {/* About */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About</Text>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>App</Text>
+            <Text style={styles.aboutValue}>Fitness Buyer Hunter</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Version</Text>
+            <Text style={styles.aboutValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Sources</Text>
+            <Text style={styles.aboutValue}>Reddit</Text>
+          </View>
         </View>
-        <View style={styles.aboutRow}>
-          <Text style={styles.aboutLabel}>Sources</Text>
-          <Text style={styles.aboutValue}>Craigslist, Reddit, Web</Text>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -124,6 +177,42 @@ const styles = StyleSheet.create({
   sectionHint: {
     fontSize: FontSize.sm,
     color: Colors.textDim,
+    lineHeight: 19,
+  },
+  zipRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  zipInput: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    color: Colors.text,
+    fontSize: FontSize.md,
+  },
+  zipBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    justifyContent: 'center',
+  },
+  zipBtnText: {
+    color: Colors.background,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  successMsg: {
+    fontSize: FontSize.sm,
+    color: '#22C55E',
+    lineHeight: 19,
+  },
+  errorMsg: {
+    fontSize: FontSize.sm,
+    color: '#EF4444',
     lineHeight: 19,
   },
   runMsg: {

@@ -4,8 +4,11 @@ const reddit = require('./scrapers/reddit');
 async function runAllScrapers() {
   await db.setRunning(true);
 
+  const zip = await db.getZip();
+  console.log(`[Scraper] Using zip: ${zip}`);
+
   const scrapers = [
-    { name: 'Reddit', fn: reddit.scrape },
+    { name: 'Reddit', fn: () => reddit.scrape(zip) },
   ];
 
   let totalNew = 0;

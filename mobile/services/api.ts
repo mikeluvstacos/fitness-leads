@@ -50,3 +50,20 @@ export async function triggerRun(): Promise<{ status: string }> {
   if (!res.ok && res.status !== 202) throw new Error(`Run failed: ${res.status}`);
   return { status: 'started' };
 }
+
+export async function fetchZip(): Promise<string> {
+  const res = await get('/settings');
+  if (!res.ok) throw new Error('Failed to fetch zip');
+  const data = await res.json();
+  return data.zip || '';
+}
+
+export async function saveZip(zip: string): Promise<void> {
+  const base = await getApiBase();
+  const res = await fetch(`${base}/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ zip }),
+  });
+  if (!res.ok) throw new Error('Failed to save zip');
+}

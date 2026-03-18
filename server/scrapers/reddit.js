@@ -8,38 +8,69 @@ const HEADERS = {
   'User-Agent': 'FitnessBuyerHunter/1.0 (fitness equipment lead finder)',
 };
 
-// Subreddits with active fitness equipment buyers
-const SUBREDDIT_SEARCHES = [
-  { sub: 'homegym',            q: 'WTB' },
-  { sub: 'homegym',            q: 'want to buy' },
-  { sub: 'homegym',            q: 'looking to buy' },
-  { sub: 'garagegym',          q: 'WTB' },
-  { sub: 'garagegym',          q: 'want to buy' },
-  { sub: 'fitness',            q: 'WTB equipment' },
-  { sub: 'weightlifting',      q: 'WTB' },
-  { sub: 'powerlifting',       q: 'WTB equipment' },
-  { sub: 'crossfit',           q: 'buying equipment' },
-  { sub: 'bodyweightfitness',  q: 'buy equipment' },
-  { sub: 'houston',            q: 'fitness equipment' },
-  { sub: 'houston',            q: 'gym equipment' },
-  { sub: 'houstontx',          q: 'fitness equipment' },
-  { sub: 'houstontx',          q: 'treadmill dumbbells weights' },
-  { sub: 'gyms',               q: 'buying equipment' },
-  { sub: 'gym',                q: 'WTB' },
+// City name → known Reddit community slugs
+const CITY_SUBREDDITS = {
+  'houston':       ['houston', 'houstontx'],
+  'dallas':        ['dallas', 'dfw'],
+  'austin':        ['austin'],
+  'san antonio':   ['sanantonio'],
+  'new york':      ['nyc', 'newyorkcity'],
+  'los angeles':   ['losangeles', 'la'],
+  'chicago':       ['chicago'],
+  'phoenix':       ['phoenix', 'az'],
+  'philadelphia':  ['philadelphia', 'philly'],
+  'san diego':     ['sandiego'],
+  'denver':        ['denver', 'denver_co'],
+  'seattle':       ['seattle'],
+  'portland':      ['portland'],
+  'miami':         ['miami'],
+  'atlanta':       ['atlanta'],
+  'nashville':     ['nashville'],
+  'charlotte':     ['charlotte'],
+  'las vegas':     ['lasvegas'],
+  'minneapolis':   ['minneapolis'],
+  'boston':        ['boston'],
+};
+
+async function getCityFromZip(zip) {
+  try {
+    const res = await axios.get(`https://api.zippopotam.us/us/${zip}`, { timeout: 5000 });
+    const place = res.data?.places?.[0];
+    if (!place) return null;
+    return {
+      city: place['place name'],
+      state: place['state abbreviation'],
+      cityLower: place['place name'].toLowerCase(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Base subreddit searches (equipment-focused, no location)
+const BASE_SUBREDDIT_SEARCHES = [
+  { sub: 'homegym',           q: 'WTB' },
+  { sub: 'homegym',           q: 'want to buy' },
+  { sub: 'homegym',           q: 'looking to buy' },
+  { sub: 'garagegym',         q: 'WTB' },
+  { sub: 'garagegym',         q: 'want to buy' },
+  { sub: 'fitness',           q: 'WTB equipment' },
+  { sub: 'weightlifting',     q: 'WTB' },
+  { sub: 'powerlifting',      q: 'WTB equipment' },
+  { sub: 'crossfit',          q: 'buying equipment' },
+  { sub: 'bodyweightfitness', q: 'buy equipment' },
+  { sub: 'gyms',              q: 'buying equipment' },
+  { sub: 'gym',               q: 'WTB' },
 ];
 
-// Broad global searches
-const GLOBAL_SEARCHES = [
+// Base global searches (no location)
+const BASE_GLOBAL_SEARCHES = [
   'WTB fitness equipment',
   'WTB gym equipment',
   'WTB treadmill',
   'WTB dumbbells',
   'WTB weight bench',
   'WTB elliptical',
-  'want to buy fitness equipment houston',
-  'want to buy gym equipment houston',
-  'buying used fitness equipment houston texas',
-  'fitness equipment wanted houston',
   'bulk gym equipment purchase',
   'buying commercial gym equipment',
 ];
@@ -79,13 +110,40 @@ async function safeFetch(fn) {
   try { return await fn(); } catch { return []; }
 }
 
-async function scrape() {
+async function scrape(zip = null) {
+  // Build location-specific searches from zip code
+  let locationSubreddits = [];
+  let locationGlobals = [];
+
+  if (zip) {
+    const loc = await getCityFromZip(zip);
+    if (loc) {
+      const { city, state, cityLower } = loc;
+      const citySubs = CITY_SUBREDDITS[cityLower] || [];
+      locationSubreddits = citySubs.flatMap(sub => [
+        { sub, q: 'fitness equipment' },
+        { sub, q: 'gym equipment' },
+        { sub, q: 'treadmill dumbbells weights' },
+      ]);
+      locationGlobals = [
+        `want to buy fitness equipment ${city}`,
+        `want to buy gym equipment ${city}`,
+        `buying used fitness equipment ${city} ${state}`,
+        `fitness equipment wanted ${city}`,
+        `WTB gym equipment ${city}`,
+      ];
+    }
+  }
+
+  const subredditSearches = [...BASE_SUBREDDIT_SEARCHES, ...locationSubreddits];
+  const globalSearches    = [...BASE_GLOBAL_SEARCHES,    ...locationGlobals];
+
   // Run all requests in parallel — no delays needed
   const [subredditResults, globalResults] = await Promise.all([
-    Promise.all(SUBREDDIT_SEARCHES.map(({ sub, q }) =>
+    Promise.all(subredditSearches.map(({ sub, q }) =>
       safeFetch(() => fetchSubreddit(sub, q))
     )),
-    Promise.all(GLOBAL_SEARCHES.map(q =>
+    Promise.all(globalSearches.map(q =>
       safeFetch(() => fetchGlobal(q))
     )),
   ]);

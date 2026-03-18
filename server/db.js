@@ -90,4 +90,19 @@ async function getRunning() {
   return data?.running || false;
 }
 
-module.exports = { insertListing, getListings, getStats, logRun, setRunning, getRunning };
+async function getZip() {
+  const { data } = await supabase
+    .from('scraper_status')
+    .select('zip_code')
+    .eq('id', 1)
+    .single();
+  return data?.zip_code || '77001';
+}
+
+async function setZip(zip) {
+  await supabase
+    .from('scraper_status')
+    .upsert({ id: 1, zip_code: zip, updated_at: new Date().toISOString() });
+}
+
+module.exports = { insertListing, getListings, getStats, logRun, setRunning, getRunning, getZip, setZip };
