@@ -1,0 +1,14 @@
+{
+  "name": "fitness-buyer-hunter",
+  "version": "1.0.0",
+  "scripts": {
+    "server": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.8.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0"
+  }
+}

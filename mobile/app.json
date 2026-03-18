@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Fitness Buyer Hunter",
+    "slug": "fitness-buyer-hunter",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "fitnessbuyerhunter",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fitnessbuyerhunter.app",
+      "buildNumber": "1"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
