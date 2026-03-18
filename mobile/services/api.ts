@@ -3,7 +3,7 @@ import type { Listing, Stats } from '@/constants/types';
 
 const URL_KEY = 'netlify_base_url';
 // Replace with your actual Netlify site URL after deploying
-const DEFAULT_URL = 'https://YOUR-SITE.netlify.app/.netlify/functions';
+const DEFAULT_URL = 'https://fitness-leads.netlify.app/.netlify/functions';
 
 export async function getApiBase(): Promise<string> {
   return (await AsyncStorage.getItem(URL_KEY)) || DEFAULT_URL;

@@ -1,15 +1,11 @@
 const db = require('./db');
-const craigslist = require('./scrapers/craigslist');
 const reddit = require('./scrapers/reddit');
-const duckduckgo = require('./scrapers/duckduckgo');
 
 async function runAllScrapers() {
   await db.setRunning(true);
 
   const scrapers = [
-    { name: 'Craigslist', fn: craigslist.scrape },
-    { name: 'Reddit',     fn: reddit.scrape },
-    { name: 'DuckDuckGo', fn: duckduckgo.scrape },
+    { name: 'Reddit', fn: reddit.scrape },
   ];
 
   let totalNew = 0;

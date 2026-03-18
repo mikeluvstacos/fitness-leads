@@ -2,39 +2,22 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  Alert,
-  Linking,
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
-import { getApiBase, setApiBase, triggerRun, fetchStatus } from '@/services/api';
+import { triggerRun, fetchStatus } from '@/services/api';
 import Constants from 'expo-constants';
 
 export default function SettingsScreen() {
-  const [apiUrl, setApiUrlState] = useState('');
-  const [saved, setSaved] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [runMsg, setRunMsg] = useState('');
 
   useEffect(() => {
-    getApiBase().then(setApiUrlState);
     fetchStatus().then(s => setIsRunning(s.running)).catch(() => {});
   }, []);
-
-  const handleSave = async () => {
-    const trimmed = apiUrl.trim().replace(/\/$/, '');
-    if (!trimmed.startsWith('http')) {
-      Alert.alert('Invalid URL', 'URL must start with https://');
-      return;
-    }
-    await setApiBase(trimmed);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
 
   const handleRunNow = async () => {
     if (isRunning) return;
@@ -47,7 +30,7 @@ export default function SettingsScreen() {
         fetchStatus().then(s => setIsRunning(s.running)).catch(() => {});
       }, 12000);
     } catch {
-      setRunMsg('Failed to reach server. Check your API URL.');
+      setRunMsg('Failed to reach server.');
       setTimeout(() => setRunMsg(''), 4000);
     }
   };
@@ -57,32 +40,9 @@ export default function SettingsScreen() {
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Fitness Buyer Hunter</Text>
 
-      {/* API URL */}
+      {/* Manual scrape */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Backend URL</Text>
-        <Text style={styles.sectionHint}>
-          Your Netlify site URL — e.g. https://your-site.netlify.app/.netlify/functions
-        </Text>
-        <TextInput
-          style={styles.input}
-          value={apiUrl}
-          onChangeText={setApiUrlState}
-          placeholder="https://your-site.netlify.app/.netlify/functions"
-          placeholderTextColor={Colors.textDim}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          returnKeyType="done"
-          onSubmitEditing={handleSave}
-        />
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : 'Save URL'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Run scraper */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Manual Scrape</Text>
+        <Text style={styles.sectionTitle}>Manual Hunt</Text>
         <Text style={styles.sectionHint}>
           Trigger a scan right now across Craigslist, Reddit, and DuckDuckGo.
           Auto-scans run every 6 hours.
@@ -114,10 +74,6 @@ export default function SettingsScreen() {
         <View style={styles.aboutRow}>
           <Text style={styles.aboutLabel}>Version</Text>
           <Text style={styles.aboutValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
-        </View>
-        <View style={styles.aboutRow}>
-          <Text style={styles.aboutLabel}>Market</Text>
-          <Text style={styles.aboutValue}>Houston, TX</Text>
         </View>
         <View style={styles.aboutRow}>
           <Text style={styles.aboutLabel}>Sources</Text>
@@ -169,26 +125,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textDim,
     lineHeight: 19,
-  },
-  input: {
-    backgroundColor: Colors.background,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    color: Colors.text,
-    fontSize: FontSize.sm,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  saveBtn: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: Colors.text,
-    fontWeight: FontWeight.semibold,
-    fontSize: FontSize.sm,
   },
   runMsg: {
     fontSize: FontSize.sm,
