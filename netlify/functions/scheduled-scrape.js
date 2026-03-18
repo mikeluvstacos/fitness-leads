@@ -1,8 +1,7 @@
-// Runs automatically every 6 hours via Netlify Scheduled Functions
 const { schedule } = require('@netlify/functions');
 const { runAllScrapers } = require('../../server/run-scrapers');
 
-const handler = schedule('0 */6 * * *', async () => {
+exports.handler = schedule('0 */6 * * *', async () => {
   console.log('[Cron] Scheduled scrape triggered at', new Date().toISOString());
   try {
     const result = await runAllScrapers();
@@ -12,5 +11,3 @@ const handler = schedule('0 */6 * * *', async () => {
   }
   return { statusCode: 200 };
 });
-
-module.exports = { handler };
