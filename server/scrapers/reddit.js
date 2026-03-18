@@ -1,47 +1,24 @@
 /**
  * Reddit scraper – finds buyer posts for fitness equipment
- * Uses Reddit OAuth API (60 req/min, works from cloud IPs)
+ * Uses Reddit public JSON API with batched requests to avoid 429s
  */
 const axios = require('axios');
 
 const USER_AGENT = 'FitnessBuyerHunter/1.0 (fitness equipment lead finder)';
+const HEADERS = { 'User-Agent': USER_AGENT };
 
-let _token = null;
-let _tokenExpiry = 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function getToken() {
-  if (_token && Date.now() < _tokenExpiry) return _token;
-
-  const { REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET } = process.env;
-  if (!REDDIT_CLIENT_ID || !REDDIT_CLIENT_SECRET) {
-    // Fall back to unauthenticated (may rate-limit)
-    return null;
+// Run requests in small batches with a pause between each batch
+async function batchedFetch(tasks, batchSize = 5, delayMs = 1500) {
+  const results = [];
+  for (let i = 0; i < tasks.length; i += batchSize) {
+    const batch = tasks.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(fn => safeFetch(fn)));
+    results.push(...batchResults);
+    if (i + batchSize < tasks.length) await sleep(delayMs);
   }
-
-  const res = await axios.post(
-    'https://www.reddit.com/api/v1/access_token',
-    'grant_type=client_credentials',
-    {
-      auth: { username: REDDIT_CLIENT_ID, password: REDDIT_CLIENT_SECRET },
-      headers: { 'User-Agent': USER_AGENT, 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 10000,
-    }
-  );
-
-  _token = res.data.access_token;
-  _tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
-  return _token;
-}
-
-async function getHeaders() {
-  const token = await getToken();
-  return token
-    ? { 'User-Agent': USER_AGENT, Authorization: `Bearer ${token}` }
-    : { 'User-Agent': USER_AGENT };
-}
-
-function apiBase(token) {
-  return token ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
+  return results;
 }
 
 // City name → known Reddit community slugs
@@ -144,17 +121,15 @@ const BASE_GLOBAL_SEARCHES = [
   'bulk gym equipment',
 ];
 
-async function fetchSubreddit(sub, q, headers) {
-  const base = headers.Authorization ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
-  const url = `${base}/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=1&sort=new&limit=25&t=year`;
-  const res = await axios.get(url, { headers, timeout: 10000 });
+async function fetchSubreddit(sub, q) {
+  const url = `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=1&sort=new&limit=25&t=year`;
+  const res = await axios.get(url, { headers: HEADERS, timeout: 10000 });
   return res.data?.data?.children || [];
 }
 
-async function fetchGlobal(q, headers) {
-  const base = headers.Authorization ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
-  const url = `${base}/search.json?q=${encodeURIComponent(q)}&sort=new&limit=25&t=year`;
-  const res = await axios.get(url, { headers, timeout: 10000 });
+async function fetchGlobal(q) {
+  const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&limit=25&t=year`;
+  const res = await axios.get(url, { headers: HEADERS, timeout: 10000 });
   return res.data?.data?.children || [];
 }
 
@@ -185,9 +160,7 @@ async function safeFetch(fn) {
 }
 
 async function scrape(zip = null) {
-  const headers = await getHeaders();
-
-  // Build location-specific searches from zip/city input
+  // Build location-specific searches
   let locationSubreddits = [];
   let locationGlobals = [];
 
@@ -196,39 +169,34 @@ async function scrape(zip = null) {
     if (loc) {
       const { city, state, cityLower } = loc;
       const citySubs = CITY_SUBREDDITS[cityLower] || [];
-      locationSubreddits = citySubs.flatMap(sub =>
-        BUYER_PHRASES.flatMap(q => [
-          { sub, q: `${q} gym equipment` },
-          { sub, q: `${q} fitness equipment` },
-          { sub, q: `${q} treadmill` },
-          { sub, q: `${q} squat rack` },
-          { sub, q: `${q} dumbbells` },
-        ])
-      );
+      locationSubreddits = citySubs.flatMap(sub => [
+        { sub, q: 'WTB gym equipment' },
+        { sub, q: 'ISO fitness equipment' },
+        { sub, q: 'want to buy treadmill' },
+        { sub, q: 'want to buy squat rack' },
+      ]);
       const locSuffix = state ? `${city} ${state}` : city;
-      locationGlobals = EQUIPMENT_TERMS.flatMap(t => [
-        `WTB ${t} ${locSuffix}`,
-        `ISO ${t} ${locSuffix}`,
-      ]).concat([
+      locationGlobals = [
+        `WTB gym equipment ${locSuffix}`,
+        `ISO fitness equipment ${locSuffix}`,
         `want to buy gym equipment ${locSuffix}`,
         `buying used fitness equipment ${locSuffix}`,
         `gym equipment wanted ${locSuffix}`,
         `gym closing equipment ${locSuffix}`,
-      ]);
+      ];
     }
   }
 
   const subredditSearches = [...BASE_SUBREDDIT_SEARCHES, ...locationSubreddits];
   const globalSearches    = [...BASE_GLOBAL_SEARCHES,    ...locationGlobals];
 
-  // Run all requests in parallel with OAuth headers
+  // Batch requests 5 at a time with 1.5s pause — avoids Reddit 429s
+  const subTasks    = subredditSearches.map(({ sub, q }) => () => fetchSubreddit(sub, q));
+  const globalTasks = globalSearches.map(q => () => fetchGlobal(q));
+
   const [subredditResults, globalResults] = await Promise.all([
-    Promise.all(subredditSearches.map(({ sub, q }) =>
-      safeFetch(() => fetchSubreddit(sub, q, headers))
-    )),
-    Promise.all(globalSearches.map(q =>
-      safeFetch(() => fetchGlobal(q, headers))
-    )),
+    batchedFetch(subTasks),
+    batchedFetch(globalTasks),
   ]);
 
   const all = [
