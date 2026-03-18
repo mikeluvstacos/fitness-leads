@@ -130,7 +130,7 @@ async function scrape(city) {
     .filter(item => {
       if (seen.has(item.url)) return false;
       seen.add(item.url);
-      return isBuyerResult(item);
+      return true; // filter disabled for testing
     });
 }
 
