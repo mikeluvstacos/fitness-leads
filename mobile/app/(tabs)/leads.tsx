@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
@@ -18,15 +17,12 @@ import { fetchListings, fetchStatus, triggerRun } from '@/services/api';
 import ListingCard from '@/components/ListingCard';
 import type { Listing } from '@/constants/types';
 
-const PLATFORMS = ['all', 'Craigslist', 'Reddit', 'Web'];
-
 export default function LeadsScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [runMsg, setRunMsg] = useState('');
-  const [platform, setPlatform] = useState('all');
   const [search, setSearch] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -34,7 +30,7 @@ export default function LeadsScreen() {
   const load = useCallback(async (isRefresh = false) => {
     try {
       const [data, status] = await Promise.all([
-        fetchListings(platform, search),
+        fetchListings(undefined, search),
         fetchStatus(),
       ]);
       setListings(data);
@@ -45,7 +41,7 @@ export default function LeadsScreen() {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
     }
-  }, [platform, search]);
+  }, [search]);
 
   useFocusEffect(
     useCallback(() => {
@@ -106,25 +102,6 @@ export default function LeadsScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Platform filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {PLATFORMS.map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.chip, platform === p && styles.chipActive]}
-            onPress={() => setPlatform(p)}
-          >
-            <Text style={[styles.chipText, platform === p && styles.chipTextActive]}>
-              {p === 'all' ? 'All' : p}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       {/* Search */}
       <View style={styles.searchRow}>
@@ -231,34 +208,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-  },
-  chip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-  },
-  chipTextActive: {
-    color: Colors.white,
-    fontWeight: FontWeight.bold,
   },
   searchRow: {
     flexDirection: 'row',
