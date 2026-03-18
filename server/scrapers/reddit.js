@@ -62,32 +62,49 @@ async function resolveLocation(input) {
   return { city: input, state: '', cityLower: input.toLowerCase() };
 }
 
-// Base subreddit searches (equipment-focused, no location)
-const BASE_SUBREDDIT_SEARCHES = [
-  { sub: 'homegym',           q: 'WTB' },
-  { sub: 'homegym',           q: 'want to buy' },
-  { sub: 'homegym',           q: 'looking to buy' },
-  { sub: 'garagegym',         q: 'WTB' },
-  { sub: 'garagegym',         q: 'want to buy' },
-  { sub: 'fitness',           q: 'WTB equipment' },
-  { sub: 'weightlifting',     q: 'WTB' },
-  { sub: 'powerlifting',      q: 'WTB equipment' },
-  { sub: 'crossfit',          q: 'buying equipment' },
-  { sub: 'bodyweightfitness', q: 'buy equipment' },
-  { sub: 'gyms',              q: 'buying equipment' },
-  { sub: 'gym',               q: 'WTB' },
+// Subreddits focused on buying/selling or fitness gear
+const BUY_SUBS = [
+  'homegym', 'garagegym', 'gym', 'gyms',
+  'fitness', 'weightlifting', 'powerlifting', 'crossfit',
+  'bodyweightfitness', 'kettlebell', 'pelotoncycle',
+  'xxfitness', 'loseit', 'running',
 ];
+
+// Equipment terms to search for individually
+const EQUIPMENT_TERMS = [
+  'squat rack', 'power rack', 'barbell', 'bumper plates', 'weight plates',
+  'dumbbells', 'adjustable dumbbells', 'kettlebell', 'weight bench',
+  'treadmill', 'elliptical', 'stationary bike', 'rowing machine',
+  'peloton', 'nordictrack', 'bowflex', 'cable machine', 'functional trainer',
+  'smith machine', 'leg press', 'lat pulldown', 'pull up bar',
+  'gym equipment', 'fitness equipment', 'home gym',
+];
+
+// Buyer intent phrases to pair with equipment
+const BUYER_PHRASES = ['WTB', 'ISO', 'want to buy', 'looking to buy', 'looking for used'];
+
+// Build subreddit searches: every sub × every buyer phrase
+const BASE_SUBREDDIT_SEARCHES = BUY_SUBS.flatMap(sub =>
+  BUYER_PHRASES.map(q => ({ sub, q }))
+);
 
 // Base global searches (no location)
 const BASE_GLOBAL_SEARCHES = [
-  'WTB fitness equipment',
-  'WTB gym equipment',
-  'WTB treadmill',
-  'WTB dumbbells',
-  'WTB weight bench',
-  'WTB elliptical',
-  'bulk gym equipment purchase',
-  'buying commercial gym equipment',
+  // WTB + specific equipment
+  ...EQUIPMENT_TERMS.map(t => `WTB ${t}`),
+  // ISO + specific equipment
+  ...EQUIPMENT_TERMS.map(t => `ISO ${t}`),
+  // broader intent phrases
+  'want to buy gym equipment',
+  'want to buy home gym',
+  'looking for used fitness equipment',
+  'buying used gym equipment',
+  'anyone selling squat rack',
+  'anyone selling treadmill',
+  'anyone selling dumbbells',
+  'gym closing equipment sale',
+  'commercial gym equipment for sale',
+  'bulk gym equipment',
 ];
 
 async function fetchSubreddit(sub, q) {
@@ -113,12 +130,15 @@ function mapPost(post) {
   };
 }
 
-const BUY_KEYWORDS  = /\b(wtb|want\s+to\s+buy|looking\s+to\s+buy|looking\s+for|buying|need|wanted|purchase|acquire|iso\b|in\s+search\s+of)\b/i;
-const SELL_KEYWORDS = /\b(wts|wtt|selling|for\s+sale|fs\b|sold|asking\s+\$|price\s+drop|reduced)\b/i;
+const BUY_KEYWORDS = /\b(wtb|iso|want\s+to\s+buy|looking\s+to\s+buy|looking\s+for|buying|need|needed|wanted|purchase|acquire|in\s+search\s+of|anyone\s+selling|where\s+can\s+i\s+(find|get|buy)|seeking|interested\s+in\s+buying|help\s+me\s+find)\b/i;
+const SELL_KEYWORDS = /\b(wts|wtt|selling\b|for\s+sale|fs\b|\[sold\]|asking\s+\$|price\s+drop|price\s+reduced|obo|firm\s+price)\b/i;
 
 function isBuyerPost(post) {
   const text = `${post.title} ${post.snippet}`;
-  return BUY_KEYWORDS.test(text) && !SELL_KEYWORDS.test(text);
+  // If it's clearly a seller post, drop it
+  if (SELL_KEYWORDS.test(text)) return false;
+  // Keep if it has any buyer signal
+  return BUY_KEYWORDS.test(text);
 }
 
 async function safeFetch(fn) {
@@ -135,18 +155,25 @@ async function scrape(zip = null) {
     if (loc) {
       const { city, state, cityLower } = loc;
       const citySubs = CITY_SUBREDDITS[cityLower] || [];
-      locationSubreddits = citySubs.flatMap(sub => [
-        { sub, q: 'fitness equipment' },
-        { sub, q: 'gym equipment' },
-        { sub, q: 'treadmill dumbbells weights' },
+      locationSubreddits = citySubs.flatMap(sub =>
+        BUYER_PHRASES.flatMap(q => [
+          { sub, q: `${q} gym equipment` },
+          { sub, q: `${q} fitness equipment` },
+          { sub, q: `${q} treadmill` },
+          { sub, q: `${q} squat rack` },
+          { sub, q: `${q} dumbbells` },
+        ])
+      );
+      const locSuffix = state ? `${city} ${state}` : city;
+      locationGlobals = EQUIPMENT_TERMS.flatMap(t => [
+        `WTB ${t} ${locSuffix}`,
+        `ISO ${t} ${locSuffix}`,
+      ]).concat([
+        `want to buy gym equipment ${locSuffix}`,
+        `buying used fitness equipment ${locSuffix}`,
+        `gym equipment wanted ${locSuffix}`,
+        `gym closing equipment ${locSuffix}`,
       ]);
-      locationGlobals = [
-        `want to buy fitness equipment ${city}`,
-        `want to buy gym equipment ${city}`,
-        `buying used fitness equipment ${city} ${state}`,
-        `fitness equipment wanted ${city}`,
-        `WTB gym equipment ${city}`,
-      ];
     }
   }
 
