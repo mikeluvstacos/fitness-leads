@@ -46,21 +46,22 @@ function buildQueries(city) {
   const queries = [];
   const location = city ? ` "${city}"` : '';
 
-  // e.g. WTB squat rack Houston site:reddit.com
-  for (const intent of INTENTS.slice(0, 3)) {       // top 3 intents
-    for (const equip of EQUIPMENT.slice(0, 5)) {    // top 5 equipment
+  // 2 intents × 4 equipment × 2 platforms = 16 queries
+  for (const intent of INTENTS.slice(0, 2)) {
+    for (const equip of EQUIPMENT.slice(0, 4)) {
       for (const platform of PLATFORMS) {
         queries.push(`${intent} "${equip}"${location} ${platform}`);
       }
     }
   }
 
-  // General wanted searches without platform restriction
+  // 3 general queries
   queries.push(`"want to buy" gym equipment${location}`);
   queries.push(`"looking to buy" fitness equipment${location}`);
   queries.push(`"ISO" gym equipment${location}`);
 
-  return queries;
+  // Cap at 19 to stay well under 100/day free limit (4 runs/day × 19 = 76)
+  return queries.slice(0, 19);
 }
 
 async function safeFetch(query) {

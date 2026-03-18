@@ -5,7 +5,10 @@
       "Bash(ls \"c:/projects/cartiq/app/\\(tabs\\)/\")",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npx expo:*)",
+      "WebFetch(domain:expo.dev)",
+      "Bash(node -e \":*)"
     ]
   }
 }
