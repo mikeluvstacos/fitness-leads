@@ -3,6 +3,7 @@
  * Uses Reddit public JSON API with batched requests to avoid 429s
  */
 const axios = require('axios');
+const { resolveLocation, getNearbyCities } = require('../location');
 
 const USER_AGENT = 'FitnessBuyerHunter/1.0 (fitness equipment lead finder)';
 const HEADERS = { 'User-Agent': USER_AGENT };
@@ -44,36 +45,6 @@ const CITY_SUBREDDITS = {
   'minneapolis':   ['minneapolis'],
   'boston':        ['boston'],
 };
-
-async function resolveLocation(input) {
-  if (!input) return null;
-  input = input.trim();
-
-  // 5-digit zip → look up city via zippopotam
-  if (/^\d{5}$/.test(input)) {
-    try {
-      const res = await axios.get(`https://api.zippopotam.us/us/${input}`, { timeout: 5000 });
-      const place = res.data?.places?.[0];
-      if (!place) return null;
-      return {
-        city: place['place name'],
-        state: place['state abbreviation'],
-        cityLower: place['place name'].toLowerCase(),
-      };
-    } catch { return null; }
-  }
-
-  // "City, ST" or "City ST" → parse directly
-  const match = input.match(/^([^,]+),?\s+([A-Za-z]{2})$/);
-  if (match) {
-    const city = match[1].trim();
-    const state = match[2].toUpperCase();
-    return { city, state, cityLower: city.toLowerCase() };
-  }
-
-  // Plain city name
-  return { city: input, state: '', cityLower: input.toLowerCase() };
-}
 
 // Subreddits focused on buying/selling or fitness gear
 const BUY_SUBS = [
@@ -168,6 +139,8 @@ async function scrape(zip = null) {
     const loc = await resolveLocation(zip);
     if (loc) {
       const { city, state, cityLower } = loc;
+
+      // Primary city subreddit searches
       const citySubs = CITY_SUBREDDITS[cityLower] || [];
       locationSubreddits = citySubs.flatMap(sub => [
         { sub, q: 'WTB gym equipment' },
@@ -175,15 +148,17 @@ async function scrape(zip = null) {
         { sub, q: 'want to buy treadmill' },
         { sub, q: 'want to buy squat rack' },
       ]);
-      const locSuffix = state ? `${city} ${state}` : city;
-      locationGlobals = [
-        `WTB gym equipment ${locSuffix}`,
-        `ISO fitness equipment ${locSuffix}`,
-        `want to buy gym equipment ${locSuffix}`,
-        `buying used fitness equipment ${locSuffix}`,
-        `gym equipment wanted ${locSuffix}`,
-        `gym closing equipment ${locSuffix}`,
-      ];
+
+      // All cities within 100 miles
+      const nearbyCities = getNearbyCities(loc, 100);
+      const allCities = [city, ...nearbyCities];
+
+      // Build global searches for each nearby city
+      locationGlobals = allCities.flatMap(c => [
+        `WTB gym equipment ${c}`,
+        `ISO fitness equipment ${c}`,
+        `buying used gym equipment ${c}`,
+      ]);
     }
   }
 

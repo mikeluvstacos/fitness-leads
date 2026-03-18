@@ -4,6 +4,7 @@
  */
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { resolveLocation, getNearbyCities } = require('../location');
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -62,14 +63,27 @@ async function safeFetch(fn) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function scrape(location = null) {
-  if (!location) return [];
+async function scrape(locationInput = null) {
+  if (!locationInput) return [];
+
+  const loc = await resolveLocation(locationInput);
+  if (!loc) return [];
+
+  // Search primary city + nearby cities within 100 miles
+  const nearbyCities = getNearbyCities(loc, 100);
+  // Limit to primary city + top 4 nearby to avoid too many requests
+  const citiesToSearch = [
+    `${loc.city}, ${loc.state}`,
+    ...nearbyCities.slice(0, 4).map(c => `${c}, ${loc.state}`),
+  ];
 
   const results = [];
-  for (const term of SEARCH_TERMS) {
-    const batch = await safeFetch(() => fetchYP(term, location));
-    results.push(...batch);
-    await sleep(1000);
+  for (const city of citiesToSearch) {
+    for (const term of SEARCH_TERMS) {
+      const batch = await safeFetch(() => fetchYP(term, city));
+      results.push(...batch);
+      await sleep(800);
+    }
   }
 
   // Dedupe by URL
