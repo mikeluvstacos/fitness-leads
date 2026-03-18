@@ -1,6 +1,6 @@
 [build]
   command = "echo 'No web build — mobile app only'"
-  publish = "dist"
+  publish = "public"
   functions = "netlify/functions"
 
 [functions]
