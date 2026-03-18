@@ -32,19 +32,34 @@ const CITY_SUBREDDITS = {
   'boston':        ['boston'],
 };
 
-async function getCityFromZip(zip) {
-  try {
-    const res = await axios.get(`https://api.zippopotam.us/us/${zip}`, { timeout: 5000 });
-    const place = res.data?.places?.[0];
-    if (!place) return null;
-    return {
-      city: place['place name'],
-      state: place['state abbreviation'],
-      cityLower: place['place name'].toLowerCase(),
-    };
-  } catch {
-    return null;
+async function resolveLocation(input) {
+  if (!input) return null;
+  input = input.trim();
+
+  // 5-digit zip → look up city via zippopotam
+  if (/^\d{5}$/.test(input)) {
+    try {
+      const res = await axios.get(`https://api.zippopotam.us/us/${input}`, { timeout: 5000 });
+      const place = res.data?.places?.[0];
+      if (!place) return null;
+      return {
+        city: place['place name'],
+        state: place['state abbreviation'],
+        cityLower: place['place name'].toLowerCase(),
+      };
+    } catch { return null; }
   }
+
+  // "City, ST" or "City ST" → parse directly
+  const match = input.match(/^([^,]+),?\s+([A-Za-z]{2})$/);
+  if (match) {
+    const city = match[1].trim();
+    const state = match[2].toUpperCase();
+    return { city, state, cityLower: city.toLowerCase() };
+  }
+
+  // Plain city name
+  return { city: input, state: '', cityLower: input.toLowerCase() };
 }
 
 // Base subreddit searches (equipment-focused, no location)
@@ -111,12 +126,12 @@ async function safeFetch(fn) {
 }
 
 async function scrape(zip = null) {
-  // Build location-specific searches from zip code
+  // Build location-specific searches from zip/city input
   let locationSubreddits = [];
   let locationGlobals = [];
 
   if (zip) {
-    const loc = await getCityFromZip(zip);
+    const loc = await resolveLocation(zip);
     if (loc) {
       const { city, state, cityLower } = loc;
       const citySubs = CITY_SUBREDDITS[cityLower] || [];

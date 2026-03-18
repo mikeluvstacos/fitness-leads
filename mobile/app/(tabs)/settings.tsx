@@ -43,8 +43,8 @@ export default function SettingsScreen() {
   };
 
   const handleSaveZip = async () => {
-    if (!/^\d{5}$/.test(zip)) {
-      setZipError('Enter a valid 5-digit zip code.');
+    if (!zip || zip.trim().length < 2) {
+      setZipError('Enter a zip code or city name.');
       return;
     }
     setZipError('');
@@ -70,17 +70,17 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Search Location</Text>
           <Text style={styles.sectionHint}>
-            Enter your zip code to find buyers near you. Used by all scans including auto-scans.
+            Enter a zip code or city & state to find buyers near you. Used by all scans including auto-scans.
           </Text>
           <View style={styles.zipRow}>
             <TextInput
               style={styles.zipInput}
               value={zip}
               onChangeText={setZip}
-              placeholder="e.g. 77001"
+              placeholder="e.g. 77001 or Houston, TX"
               placeholderTextColor={Colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={5}
+              keyboardType="default"
+              maxLength={50}
               returnKeyType="done"
               onSubmitEditing={handleSaveZip}
             />

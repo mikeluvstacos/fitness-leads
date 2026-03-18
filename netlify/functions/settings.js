@@ -21,11 +21,11 @@ exports.handler = async (event) => {
 
   if (event.httpMethod === 'POST') {
     const { zip } = JSON.parse(event.body || '{}');
-    if (!zip || !/^\d{5}$/.test(zip)) {
+    if (!zip || zip.trim().length < 2) {
       return {
         statusCode: 400,
         headers: CORS,
-        body: JSON.stringify({ error: 'Invalid zip code' }),
+        body: JSON.stringify({ error: 'Enter a zip code or city name' }),
       };
     }
     await db.setZip(zip);
