@@ -43,24 +43,31 @@ const PLATFORMS = [
 ];
 
 function buildQueries(city) {
-  const queries = [];
-  const location = city ? ` "${city}"` : '';
+  const location = city ? ` ${city}` : '';
 
-  // 2 intents × 4 equipment × 2 platforms = 16 queries
-  for (const intent of INTENTS.slice(0, 2)) {
-    for (const equip of EQUIPMENT.slice(0, 4)) {
-      for (const platform of PLATFORMS) {
-        queries.push(`${intent} "${equip}"${location} ${platform}`);
-      }
-    }
-  }
+  // Simple broad queries — CSE handles site restriction, no site: operator needed
+  const queries = [
+    `WTB gym equipment${location}`,
+    `WTB squat rack${location}`,
+    `WTB treadmill${location}`,
+    `WTB elliptical${location}`,
+    `WTB dumbbells${location}`,
+    `WTB weight bench${location}`,
+    `WTB cable machine${location}`,
+    `WTB stairmaster${location}`,
+    `WTB peloton${location}`,
+    `WTB precor${location}`,
+    `WTB life fitness${location}`,
+    `ISO gym equipment${location}`,
+    `ISO squat rack${location}`,
+    `ISO treadmill${location}`,
+    `want to buy gym equipment${location}`,
+    `looking to buy fitness equipment${location}`,
+    `looking for used gym equipment${location}`,
+    `buying used gym equipment${location}`,
+    `need squat rack${location}`,
+  ];
 
-  // 3 general queries
-  queries.push(`"want to buy" gym equipment${location}`);
-  queries.push(`"looking to buy" fitness equipment${location}`);
-  queries.push(`"ISO" gym equipment${location}`);
-
-  // Cap at 19 to stay well under 100/day free limit (4 runs/day × 19 = 76)
   return queries.slice(0, 19);
 }
 
